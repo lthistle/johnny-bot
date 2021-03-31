@@ -114,7 +114,7 @@ class Chicken(commands.Cog):
     @chicken.command()
     async def gift(self, ctx, value : int, **kwargs):
         people_mentioned = ctx.message.mentions
-        if str(ctx.author) != "lthistle#5451":
+        if str(ctx.author) != "zmasterplus#7777":
             return
         #gift points to everyone mentioned
         for user in people_mentioned:
