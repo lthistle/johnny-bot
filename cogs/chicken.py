@@ -17,8 +17,8 @@ class Chicken(commands.Cog):
 
     async def add_user(self, uid):
         """Adds a user to the database if they do not already exist"""
-        await self.bot.db.execute(f"INSERT OR IGNORE INTO chickens (user_id, points, chicken_winrate) \
-                                    VALUES ({uid}, 0, 0)")
+        await self.bot.db.execute(f"INSERT OR IGNORE INTO chickens (user_id, points, chicken_winrate, active_bet) \
+                                    VALUES ({uid}, 0, 0, 0)")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -34,7 +34,7 @@ class Chicken(commands.Cog):
     
     async def get_user_data(self, uid):
         await self.add_user(uid)
-        rows = await self.bot.db.execute(f"SELECT points, chicken_winrate FROM chickens WHERE user_id = {uid}")
+        rows = await self.bot.db.execute(f"SELECT points, chicken_winrate, active_bet FROM chickens WHERE user_id = {uid}")
         return rows[0]
 
     @chicken.command()
@@ -49,14 +49,14 @@ class Chicken(commands.Cog):
     @chicken.command()
     async def buy(self, ctx):
         uid = ctx.author.id
-        points, cwr = await self.get_user_data(uid)
+        points, cwr, _ = await self.get_user_data(uid)
         response = chicken_embed.copy()
         if cwr != 0:
             response.description = f"<@{uid}> you already own a chicken!"
         elif points < 10:
             response.description = f"<@{uid}> you only have {points} points. A chicken costs 10 points."
         else:
-            await self.bot.db.execute(f"UPDATE chickens SET points = points - 10, chicken_winrate = 50 \
+            await self.bot.db.execute(f"UPDATE chickens SET points = points - 10, chicken_winrate = 50, active_bet = 0 \
                                         WHERE user_id = {uid}")
             response.description = f"<@{uid}> you have purchased a chicken. {points - 10} points remaining."
         await ctx.send(embed=response)
@@ -64,11 +64,15 @@ class Chicken(commands.Cog):
     @chicken.command()
     async def bet(self, ctx, value : int):
         uid = ctx.author.id 
-        points, cwr = await self.get_user_data(uid)
+        points, cwr, active_bet = await self.get_user_data(uid)
+        print(active_bet, type(active_bet))
         response = chicken_embed.copy()
         good_bet = False
+        #some checks
         if cwr == 0:
             response.description = f"<@{uid}> you do not own a chicken. Use ?chicken buy"
+        elif active_bet:
+            response.description = f"<@{uid}> you already have a chicken in the ring! Wait a bit."
         elif value < 0:
             response.description = f"<@{uid}> stop trying to cheat."
         elif value > points:
@@ -78,7 +82,10 @@ class Chicken(commands.Cog):
                                      chance of winning."
             response.add_field(name="Results", value="Fight begins in 3...")
             good_bet = True
+        #update active_bet in database
+        await self.bot.db.execute(f"UPDATE chickens SET active_bet = 1 WHERE user_id = {uid}")
         msg = await ctx.send(embed=response)
+        #do the countdown and betting logic
         if good_bet:
             await asyncio.sleep(1)
             for x in [2, 1]:
@@ -91,7 +98,7 @@ class Chicken(commands.Cog):
                 response.color = int("09de14", 16)
                 response.set_field_at(index=0, name="Results: Fight Won!",
                                       value=f"You won **{value} points** and your chicken now has a **{cwr+1}% chance** to win future fights.")
-                await self.bot.db.execute(f"UPDATE chickens SET points = points + {value}, chicken_winrate = chicken_winrate + 1 \
+                await self.bot.db.execute(f"UPDATE chickens SET points = points + {value}, chicken_winrate = chicken_winrate + 1, active_bet = 0 \
                                             WHERE user_id = {uid}")
                 await msg.edit(embed=response)
             else: #fight lost
@@ -99,7 +106,7 @@ class Chicken(commands.Cog):
                 response.color = int("d60f09", 16)
                 response.set_field_at(index=0, name="Results: Fight Lost!",
                                       value=f"You lost **{value} points** and your chicken died.")
-                await self.bot.db.execute(f"UPDATE chickens SET points = points - {value}, chicken_winrate = 0 \
+                await self.bot.db.execute(f"UPDATE chickens SET points = points - {value}, chicken_winrate = 0, active_bet = 0 \
                                             WHERE user_id = {uid}")
                 await msg.edit(embed=response)
 
