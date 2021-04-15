@@ -16,13 +16,17 @@ CREATE TABLE IF NOT EXISTS counter_table (
     highest_number_timestamp integer,
     last_count integer,
     last_count_timestamp integer,
-    longest_break integer,
+    longest_counting_delay_sec integer,
 );
 
 CREATE TABLE IF NOT EXISTS counter_leaderboard (
     user_id integer NOT NULL UNIQUE,
     highest_number integer,
-
+    highest_number_timestamp integer,
+    successful_counts integer,
+    failed_counts integer,
+    worst_miscount_num integer,
+    worst_miscount_timestamp integer
 )
 
 CREATE TABLE IF NOT EXISTS chicken_leaderboard (
