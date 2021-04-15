@@ -20,7 +20,7 @@ class Alan(commands.Cog):
             return
         msg = await ctx.fetch_message(replied.message_id)
         print(msg.embeds[0].url)
-        print(msg.)
+        #print(msg.)
 
     #msg.embeds.url has the image url
     #ctx.message.reference
