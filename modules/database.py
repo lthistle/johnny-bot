@@ -12,7 +12,7 @@ class SqliteDB:
         try: 
             conn = sqlite3.connect(db_file)
             print("Sucessfully connected to database.")
-        except Error as e:
+        except sqlite3.Error as e:
             print(e)
         self.conn = conn
 
@@ -23,5 +23,5 @@ class SqliteDB:
             self.conn.commit()
             rows = c.fetchall()
             return rows
-        except Error as e:
+        except sqlite3.Error as e:
             print(e)
