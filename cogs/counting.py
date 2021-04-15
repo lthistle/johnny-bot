@@ -4,7 +4,6 @@ import time
 import random
 import asyncio
 import operator as op
-import simpleeval
 import ctypes
 
 import simpleeval
@@ -29,8 +28,6 @@ new_record_embed = discord.Embed(
 
 def bitwise_not_unsigned(x):
     bit_num = len(bin(x))
-
-    print("bit num is " + str(bit_num))
 
     if bit_num >= 64:
         return ctypes.c_uint64(~x).value
@@ -77,30 +74,32 @@ class Counting(commands.Cog):
         elif message.content[0].isdigit() or (message.content[0] == '~' and
                 message.content[1].isdigit()) or (message.content[0] == '(' and message.content[1].isdigit()):
             guild_stats = await self.bot.db.execute(f"SELECT current_number, highest_number, highest_number_timestamp, "
-                                                   f"last_count, last_count_timestamp, longest_counting_delay_sec "
-                                                   f"FROM counter_table WHERE channel_id={message.channel.id} "
-                                                   f"AND guild_id={message.guild.id}")
+                                                    f"last_count, last_count_timestamp, longest_counting_delay_sec, "
+                                                    f"last_counter_user_id FROM counter_table "
+                                                    f"WHERE channel_id={message.channel.id} AND "
+                                                    f"guild_id={message.guild.id}")
             user_stats = await self.bot.db.execute(f"SELECT * FROM counter_leaderboard WHERE "
                                                    f"user_id={message.author.id}")
 
-            if guild_stats is None or len(guild_stats) <= 0:
+            if guild_stats is None or len(guild_stats) < 0:
                 return
             else:
-                guild_stats = guild_stats[0]
+                # convert guild and user stats from immutable tuple to mutable list
+                guild_stats = [x for xs in guild_stats for x in xs]
+                user_stats = [x for xs in user_stats for x in xs]
 
                 expected_value = guild_stats[0]
 
                 if user_stats is None or len(user_stats) <= 0:
-                    user_stats = [message.author.id, 0, 0, 0, 0, 0]
+                    user_stats = [message.author.id, 0, 0, 0, 0, 0, 0]
 
-                    await self.bot.db.execute(f"INSERT INTO")
-
-
-            print(expected_value)
+                    await self.bot.db.execute(f"INSERT INTO counter_leaderboard VALUES ({user_stats[0]}, "
+                                              f"{user_stats[1]}, {user_stats[2]}, {user_stats[3]}, {user_stats[4]},"
+                                              f"{user_stats[5]}, {user_stats[6]})")
 
             user_value = self.simple_eval.eval(message.content)
 
-            if expected_value == user_value:
+            if expected_value == user_value and guild_stats[6] != message.author.id:
                 new_value = expected_value + 1
 
                 # guild stat code
@@ -116,18 +115,19 @@ class Counting(commands.Cog):
                         self.record_reached = True
 
                     guild_stats[1] = expected_value
-                    guild_stats[2] = message.created_at
+                    guild_stats[2] = int(message.created_at.timestamp())
 
-                if message.created_at - guild_stats[4] > guild_stats[5]:
-                    guild_stats[5] = message.created_at - guild_stats[4]
+                if int(message.created_at.timestamp() - guild_stats[4]) > guild_stats[5] and guild_stats[4] != 0:
+                    guild_stats[5] = int(message.created_at.timestamp() - guild_stats[4])
 
                 guild_stats[3] = expected_value
-                guild_stats[4] = message.created_at
+                guild_stats[4] = int(message.created_at.timestamp())
+                guild_stats[6] = message.author.id
 
                 # user stat code
                 if expected_value > user_stats[1]:
                     user_stats[1] = expected_value
-                    user_stats[2] = message.created_at
+                    user_stats[2] = int(message.created_at.timestamp())
 
                 user_stats[3] += 1
 
@@ -141,23 +141,35 @@ class Counting(commands.Cog):
 
                 if expected_value > user_stats[4]:
                     user_stats[5] = expected_value
-                    user_stats[6] = message.created_at
+                    user_stats[6] = int(message.created_at.timestamp())
 
                 await message.add_reaction("❌")
 
                 response = failure_counting_embed.copy()
-                response.description = f"YOU RUINED IT at {expected_value}! You instead said {user_value}! START AT ONE AGAIN!!!"
+
+                response.description = f"YOU RUINED IT at {expected_value}! "
+
+                if guild_stats[6] == message.author.id:
+                    response.description += f"You can't say two numbers in a row! "
+                else:
+                    response.description += f"You instead said {user_value}! "
+
+                response.description += "START AT ONE AGAIN!!!"
+
+                guild_stats[6] = 0
 
                 await message.reply(embed=response)
 
             await self.bot.db.execute(f"UPDATE counter_table SET current_number = {new_value}, "
-                                      f"highest_number = {guild_stats[1]}, highest_number_timestamp = {guild_stats[2]}"
+                                      f"highest_number = {guild_stats[1]}, highest_number_timestamp = {guild_stats[2]},"
                                       f"last_count = {guild_stats[3]}, last_count_timestamp = {guild_stats[4]}, "
-                                      f"longest_counting_delay_sec = {guild_stats[5]} WHERE "
+                                      f"longest_counting_delay_sec = {guild_stats[5]}, "
+                                      f"last_counter_user_id={guild_stats[6]}  WHERE "
                                       f"channel_id={message.channel.id} AND guild_id={message.guild.id}")
             await self.bot.db.execute(f"UPDATE counter_leaderboard SET highest_number = {user_stats[1]}, "
-                                      f"highest_number_timestamp = {user_stats[2]}, successful_counts = {user_stats[3]},"
-                                      f"failed_counts = {user_stats[4]}, worst_miscount_num = {user_stats[5]}, "
+                                      f"highest_number_timestamp = {user_stats[2]}, "
+                                      f"successful_counts = {user_stats[3]}, failed_counts = {user_stats[4]}, "
+                                      f"worst_miscount_num = {user_stats[5]}, "
                                       f"worst_miscount_timestamp = {user_stats[6]} WHERE user_id={message.author.id}")
 
     @counting.command()
@@ -184,8 +196,9 @@ class Counting(commands.Cog):
 
             await self.bot.db.execute(f"INSERT INTO counter_table (guild_id, channel_id, current_number, highest_number,"
                                       f"highest_number_timestamp, last_count, last_count_timestamp, "
-                                      f"longest_counting_delay_sec) VALUES ({guild_result.id}, "
-                                      f"{ctx.message.channel_mentions[0].id}, {1}, {0}, {0}, {0}, {0}, {0})")
+                                      f"longest_counting_delay_sec, last_counter_user_id) VALUES ({guild_result.id}, "
+                                      f"{ctx.message.channel_mentions[0].id}, {1}, {0}, {0}, {0}, "
+                                      f"{0}, {0}, {0})")
 
             response = counting_embed.copy()
             response.description = f"Counting channel successfully set to #{ctx.message.channel_mentions[0].name}"
@@ -213,23 +226,49 @@ class Counting(commands.Cog):
                 guild_row = guild_row[0]
 
                 response = counting_embed.copy()
-                response.title += "- Server-wide stats"
+                response.title += ": Server-wide stats"
 
-                response.set_image(ctx.message.guild.icon_url)
+                response.set_thumbnail(url=ctx.message.guild.icon_url)
 
-                response.add_field("Highest number counted to", f"{guild_row[3]} at "
-                                                                f"{self._get_human_readable_time(guild_row[4])}")
-                response.add_field("Last count", f"To {guild_row[5]} at {self._get_human_readable_time(guild_row[6])}")
-                response.add_field("Longest time between counting", f"{guild_row[7]} seconds")
+                response.add_field(name="Highest number counted to",
+                                   value=f"{guild_row[3]} at {self._get_human_readable_time(guild_row[4])}")
+                response.add_field(name="Last count",
+                                   value=f"To {guild_row[5]} at {self._get_human_readable_time(guild_row[6])}")
+
+                if int(guild_row[7]) > (60 * 60) * 24:
+                    response_value = f"{int(guild_row[7] / (60 * 60 * 24))} days " \
+                                     f"{(int(guild_row[7] % (60 * 60 * 24)) / (60 * 60))} hours"
+                if guild_row[7] > (60 * 60):
+                    response_value = f"{int(guild_row[7] / (60 * 60))} hours {int((guild_row[7] % (60 * 60)) / 60)} " \
+                                     f"minutes"
+                elif guild_row[7] > 60:
+                    response_value = f"{int(guild_row[7] / 60)} minutes {int(guild_row[7] % 60)} seconds"
+                else:
+                    response_value = f"{int(guild_row[7])} seconds"
+
+                response.add_field(name="Longest time between counting", value=response_value)
 
                 await ctx.message.reply(embed=response)
 
     @counting.command()
     async def userstats(self, ctx):
+        string_split_array = ctx.message.content.split(" ")
         target_user = ctx.message.author
 
         if len(ctx.message.mentions) > 0:
             target_user = ctx.message.mentions[0]
+        elif len(string_split_array) > 2:
+            target_username = string_split_array[2]
+
+            target_user = ctx.message.guild.get_member_named(target_username)
+
+            if target_user is None:
+                response = failure_counting_embed.copy()
+                response.description = f"{target_username} wasn't found in this server!"
+
+                await ctx.message.reply(embed=response)
+
+                return
 
         user_stats = await self.bot.db.execute(f"SELECT * FROM counter_leaderboard WHERE "
                                                f"user_id={target_user.id}")
@@ -243,18 +282,26 @@ class Counting(commands.Cog):
             user_stats = user_stats[0]
 
             response = counting_embed.copy()
-            response.title += f"{target_user.display_name}'s stats"
+            response.title += f": {target_user.display_name}'s stats"
 
-            response.set_image(target_user.avatar_url)
+            response.set_thumbnail(url=target_user.avatar_url)
 
-            response.add_field("Highest number counted to", f"{user_stats[1]}")
-            response.add_field("Successful counts", f"{user_stats[2]}")
-            response.add_field("Unsuccessful counts", f"{user_stats[3]}")
-            response.add_field("Accuracy", f"{(float(user_stats[2]) / (user_stats[2] + user_stats[3]) * 100)}%")
-            response.add_field("Worst miscount", f"Didn't count to {user_stats[4]} at {user_stats[5]}")
+            if user_stats[3] + user_stats[4] != 0:
+                accuracy = (float(user_stats[3]) / (user_stats[3] + user_stats[4])) * 100
+            else:
+                accuracy = 100
+
+            response.add_field(name="Highest number counted to",
+                               value=f"{user_stats[1]} at {self._get_human_readable_time(user_stats[2])} UTC")
+            response.add_field(name="Successful counts", value=f"{user_stats[3]}")
+            response.add_field(name="Unsuccessful counts", value=f"{user_stats[4]}")
+            response.add_field(name="Accuracy",
+                               value=f"{accuracy}%")
+            response.add_field(name="Worst miscount",
+                               value=f"Didn't count to {user_stats[5]} at "
+                                     f"{self._get_human_readable_time(user_stats[6])} UTC")
 
             await ctx.message.reply(embed=response)
-
 
 
 def setup(bot):

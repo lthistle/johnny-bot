@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS counter_table (
     last_count integer,
     last_count_timestamp integer,
     longest_counting_delay_sec integer,
+    last_counter_user_id integer
 );
 
 CREATE TABLE IF NOT EXISTS counter_leaderboard (
@@ -27,7 +28,7 @@ CREATE TABLE IF NOT EXISTS counter_leaderboard (
     failed_counts integer,
     worst_miscount_num integer,
     worst_miscount_timestamp integer
-)
+);
 
 CREATE TABLE IF NOT EXISTS chicken_leaderboard (
     id integer PRIMARY KEY,
