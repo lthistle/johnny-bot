@@ -21,7 +21,7 @@ class Alan(commands.Cog):
         if not replied:
             return
         msg = await ctx.fetch_message(replied.message_id)
-
+    
         if msg.attachments:
             image_url = msg.attachments[0].url
             print("passed")

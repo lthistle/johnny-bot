@@ -5,8 +5,10 @@ import sqlite3
 from modules import database
 from discord.ext import commands
 
+from config import TOKEN
+
+
 #@TODO: Make real config settings
-TOKEN = os.environ["JBOT_DISCORD_TOKEN"]
 prefix = "?"
 class JohnnyBot(commands.Bot):
     def __init__(self, **kwargs):
@@ -21,7 +23,8 @@ bot = JohnnyBot(
 
 extensions = [
     "chicken",
-    "alan"
+    "alan",
+    "counting"
     #"admin"
 ]
 
