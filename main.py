@@ -24,8 +24,8 @@ bot = JohnnyBot(
 extensions = [
     "chicken",
     "alan",
-    "counting"
-    #"admin"
+    "counting",
+    "admin"
 ]
 
 if __name__ == "__main__":

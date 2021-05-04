@@ -181,7 +181,7 @@ class Counting(commands.Cog):
             response.description = "This command must be executed in a server!"
 
             await ctx.message.reply(embed=response)
-        elif not ctx.message.author.guild_permissions.administrator and ctx.message.author.id != 192011183367258113:
+        elif not ctx.message.author.guild_permissions.administrator and ctx.message.author.id not in [395354491370733568, 192011183367258113]:
             response = failure_counting_embed.copy()
             response.description = "You must be an admin or a very cool person to execute this command!"
 
